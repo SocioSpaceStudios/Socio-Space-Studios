@@ -1,316 +1,530 @@
+import React, {
+  createContext,
+  useContext,
+  useEffect,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
+import { supabase } from "../supabaseClient";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import type { ReactNode } from 'react';
-import type { Campaign, Task, Payment, User, Job, TeamMember, JobStatus, ScriptHistoryItem, MediaKit, Thread, Attachment, TeamResource, Toast } from '../types';
-import { initialCampaigns, initialTasks, initialPayments, mockUser, initialJobs, initialTeam, initialMediaKit, initialThreads, initialResources } from '../data/mockData';
+// ---------- Types ----------
 
-type Theme = 'light' | 'dark';
+export type Campaign = {
+  id: string;
+  name: string;
+  status: string;
+  brand?: string | null;
+};
 
-interface DataContextType {
-  user: User;
+export type Task = {
+  id: string;
+  title: string;
+  status: string;
+  dueDate: string | null;
+  campaignId?: string | null;
+};
+
+export type Payment = {
+  id: string;
+  type: string;   // "Income" / "Expense"
+  status: string; // "Paid" / "Pending"
+  amount: number;
+  date: string | null;
+};
+
+export type Job = {
+  id: string;
+  title: string;
+  status: string;
+  brand?: string | null;
+};
+
+export type Toast = {
+  id: string;
+  type: "success" | "error" | "info";
+  message: string;
+};
+
+export type User = {
+  name: string;
+  avatarUrl: string;
+  email?: string;
+  niche?: string;
+  bio?: string;
+  connectedAccounts?: {
+    instagram?: boolean;
+    tiktok?: boolean;
+    youtube?: boolean;
+    twitter?: boolean;
+  };
+};
+
+type DataContextValue = {
+  // core data
   campaigns: Campaign[];
   tasks: Task[];
   payments: Payment[];
   jobs: Job[];
-  team: TeamMember[];
-  teamResources: TeamResource[];
-  scriptsHistory: ScriptHistoryItem[];
-  mediaKit: MediaKit;
-  threads: Thread[];
-  theme: Theme;
-  toasts: Toast[];
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-  removeToast: (id: string) => void;
+  loading: boolean;
+  error: string | null;
+
+  // layout / UI state
+  user: User;
+  updateUser: (patch: Partial<User>) => void;
+
+  theme: "light" | "dark";
   toggleTheme: () => void;
-  updateUser: (user: Partial<User>) => void;
-  addCampaign: (campaign: Campaign) => void;
-  updateCampaign: (campaign: Campaign) => void;
-  addTask: (task: Task) => void;
-  addTasks: (tasks: Task[]) => void;
-  updateTask: (updatedTask: Task) => void;
-  deleteTask: (taskId: string) => void;
-  addPayment: (payment: Payment) => void;
-  updatePayment: (payment: Payment) => void;
-  deletePayment: (id: string) => void;
-  updateTaskStatus: (id: string, status: Task['status']) => void;
-  addJob: (job: Job) => void;
-  updateJob: (job: Job) => void;
-  updateJobStatus: (id: string, status: JobStatus) => void;
+
+  toasts: Toast[];
+  addToast: (toast: Omit<Toast, "id">) => void;
+  removeToast: (id: string) => void;
+  showToast: (message: string, type?: Toast["type"]) => void;
+
+  // extra “app data” the pages expect
+  mediaKit: any;
+  updateMediaKit: (patch: any) => void;
+
+  scriptsHistory: any[];
+  addScriptToHistory: (item: any) => void;
+
+  team: any[];
+  teamResources: any[];
+  threads: any[];
+
+  // actions used around the app (many are stubs for now)
+  addCampaign: (campaign: any) => void;
+  addTasks: (tasks: any[]) => void;
+  updateCampaign: (id: string, patch: any) => void;
+
+  addJob: (job: any) => void;
+  updateJob: (id: string, patch: any) => void;
   deleteJob: (id: string) => void;
-  addTeamMember: (member: TeamMember) => void;
-  updateTeamMember: (member: TeamMember) => void;
-  removeTeamMember: (id: string) => void;
-  addTeamResource: (resource: TeamResource) => void;
-  removeTeamResource: (id: string) => void;
-  addScriptToHistory: (script: ScriptHistoryItem) => void;
-  updateMediaKit: (kit: MediaKit) => void;
-  sendMessage: (threadId: string, content: string, attachments?: Attachment[]) => void;
-  createThread: (participants: string[], type: 'email' | 'chat', subject?: string) => void;
-  archiveThread: (threadId: string) => void;
-  unarchiveThread: (threadId: string) => void;
-  markThreadRead: (threadId: string) => void;
-}
+  updateJobStatus: (id: string, status: string) => void;
 
-const DataContext = createContext<DataContextType | undefined>(undefined);
+  addTask: (task: any) => void;
+  updateTask: (id: string, patch: any) => void;
+  deleteTask: (id: string) => void;
+  updateTaskStatus: (id: string, status: string) => void;
 
-export const DataProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User>(mockUser);
-  const [campaigns, setCampaigns] = useState<Campaign[]>(initialCampaigns);
-  const [tasks, setTasks] = useState<Task[]>(initialTasks);
-  const [payments, setPayments] = useState<Payment[]>(initialPayments);
-  const [jobs, setJobs] = useState<Job[]>(initialJobs);
-  const [team, setTeam] = useState<TeamMember[]>(initialTeam);
-  const [teamResources, setTeamResources] = useState<TeamResource[]>(initialResources);
-  const [scriptsHistory, setScriptsHistory] = useState<ScriptHistoryItem[]>([]);
-  const [mediaKit, setMediaKit] = useState<MediaKit>(initialMediaKit);
-  const [threads, setThreads] = useState<Thread[]>(initialThreads);
-  const [toasts, setToasts] = useState<Toast[]>([]);
-  
-  // Theme State - Default to LIGHT
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = localStorage.getItem('socioflow-theme');
-    return (saved as Theme) || 'light';
+  addPayment: (payment: any) => void;
+  updatePayment: (id: string, patch: any) => void;
+  deletePayment: (id: string) => void;
+
+  // comms + team
+  sendMessage: (threadId: any, message: any) => void;
+  markThreadRead: (threadId: any) => void;
+  archiveThread: (threadId: any) => void;
+  unarchiveThread: (threadId: any) => void;
+  createThread: (thread: any) => void;
+
+  addTeamMember: (member: any) => void;
+  updateTeamMember: (id: any, patch: any) => void;
+  removeTeamMember: (id: any) => void;
+  addTeamResource: (resource: any) => void;
+  removeTeamResource: (id: any) => void;
+};
+
+const DataContext = createContext<DataContextValue | undefined>(undefined);
+
+// ---------- Provider ----------
+
+export const DataProvider: React.FC<{ children: ReactNode }> = ({
+  children,
+}) => {
+  // core data
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [jobs, setJobs] = useState<Job[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // user & theme
+  const [user, setUser] = useState<User>({
+    name: "Creator",
+    avatarUrl:
+      "https://ui-avatars.com/api/?name=Creator&background=8B5CF6&color=ffffff",
+    email: "creator@example.com",
+    niche: "Content Creator",
+    bio: "",
+    connectedAccounts: {
+      instagram: false,
+      tiktok: false,
+      youtube: false,
+      twitter: false,
+    },
+  });
+
+  const updateUser = (patch: Partial<User>) => {
+    setUser((prev) => ({ ...prev, ...patch }));
+  };
+
+  const [theme, setTheme] = useState<"light" | "dark">(() => {
+    if (typeof window !== "undefined") {
+      return window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light";
+    }
+    return "light";
   });
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
+    if (typeof document !== "undefined") {
+      if (theme === "dark") {
+        document.documentElement.classList.add("dark");
+      } else {
+        document.documentElement.classList.remove("dark");
+      }
     }
-    localStorage.setItem('socioflow-theme', theme);
   }, [theme]);
 
   const toggleTheme = () => {
-    setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
-    const id = Date.now().toString();
-    setToasts(prev => [...prev, { id, message, type }]);
-    setTimeout(() => {
-      removeToast(id);
-    }, 3000);
+  // toasts
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const addToast = (toast: Omit<Toast, "id">) => {
+    const id = crypto.randomUUID();
+    setToasts((prev) => [...prev, { id, ...toast }]);
   };
 
   const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
+    setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const updateUser = (data: Partial<User>) => {
-    setUser(prev => ({ ...prev, ...data }));
+  const showToast = (message: string, type: Toast["type"] = "info") => {
+    addToast({ type, message });
   };
 
-  const addCampaign = (campaign: Campaign) => {
+  // extra app data
+  const [mediaKit, setMediaKit] = useState<any | null>(null);
+  const [scriptsHistory, setScriptsHistory] = useState<any[]>([]);
+  const [team, setTeam] = useState<any[]>([]);
+  const [teamResources, setTeamResources] = useState<any[]>([]);
+  const [threads, setThreads] = useState<any[]>([]);
+
+  const updateMediaKit = (patch: any) => {
+    setMediaKit((prev: any) => ({ ...(prev || {}), ...patch }));
+  };
+
+  const addScriptToHistory = (item: any) => {
+    setScriptsHistory((prev) => [item, ...prev]);
+  };
+
+  // ---------- Supabase Loading ----------
+
+  useEffect(() => {
+    async function loadData() {
+      setLoading(true);
+      setError(null);
+
+      try {
+        // 1) Brands (for lookups)
+        const { data: brandsData, error: brandsError } = await supabase
+          .from("brands")
+          .select("id, name");
+
+        if (brandsError) throw brandsError;
+
+        const findBrandName = (brandId: string | null | undefined) => {
+          if (!brandId || !brandsData) return null;
+          const match = (brandsData as any[]).find((b: any) => b.id === brandId);
+          return match?.name ?? null;
+        };
+
+        // 2) Outreach -> campaigns
+        const { data: outreachData, error: outreachError } = await supabase
+          .from("outreach")
+          .select(
+            "id, status, brand_id, deliverables_summary, rate_offered, currency"
+          );
+
+        if (outreachError) throw outreachError;
+
+        const mappedCampaigns: Campaign[] =
+          (outreachData ?? []).map((o: any) => ({
+            id: o.id,
+            name:
+              findBrandName(o.brand_id) ||
+              o.deliverables_summary ||
+              "Unnamed Campaign",
+            status: o.status ?? "Not Started",
+            brand: findBrandName(o.brand_id),
+          })) ?? [];
+
+        setCampaigns(mappedCampaigns);
+
+        // 3) Posts -> tasks (content planner)
+        const { data: postsData, error: postsError } = await supabase
+          .from("posts")
+          .select("id, title, idea, status, scheduled_date");
+
+        if (postsError) throw postsError;
+
+        const mappedTasks: Task[] =
+          (postsData ?? []).map((p: any) => ({
+            id: p.id,
+            title: p.title || p.idea || "Untitled Content",
+            status: p.status ?? "Idea",
+            dueDate: p.scheduled_date ?? null,
+            campaignId: null,
+          })) ?? [];
+
+        setTasks(mappedTasks);
+
+        // 4) Income -> payments
+        const { data: incomeData, error: incomeError } = await supabase
+          .from("income")
+          .select("id, amount, currency, category, source_name, date");
+
+        if (incomeError) throw incomeError;
+
+        const mappedPayments: Payment[] =
+          (incomeData ?? []).map((i: any) => ({
+            id: i.id,
+            type: "Income",
+            status: "Paid",
+            amount: Number(i.amount ?? 0),
+            date: i.date ?? null,
+          })) ?? [];
+
+        setPayments(mappedPayments);
+
+        // 5) UGC jobs -> jobs
+        const { data: jobsData, error: jobsError } = await supabase
+          .from("ugc_jobs")
+          .select("id, concept, status, brand_id");
+
+        if (jobsError) throw jobsError;
+
+        const mappedJobs: Job[] =
+          (jobsData ?? []).map((j: any) => ({
+            id: j.id,
+            title: j.concept || "Untitled UGC Job",
+            status: j.status ?? "Applied",
+            brand: findBrandName(j.brand_id),
+          })) ?? [];
+
+        setJobs(mappedJobs);
+      } catch (err: any) {
+        console.error("Error loading data from Supabase:", err?.message || err);
+        setError(err?.message ?? "Failed to load data");
+        showToast("Failed to load dashboard data from Supabase.", "error");
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadData();
+  }, []); // run once on mount
+
+  // ---------- in-memory actions (basic) ----------
+
+  // these are intentionally simple; later you can wire them to Supabase mutations
+
+  const addCampaign = (campaign: any) => {
     setCampaigns((prev) => [...prev, campaign]);
-    showToast(`Campaign "${campaign.name}" created!`);
   };
 
-  const updateCampaign = (updatedCampaign: Campaign) => {
-    setCampaigns((prev) => prev.map(c => c.id === updatedCampaign.id ? updatedCampaign : c));
-    showToast('Campaign updated successfully');
-  };
-
-  const addTask = (task: Task) => {
-    setTasks((prev) => [...prev, task]);
-    showToast('Task added to calendar');
-  };
-
-  const addTasks = (newTasks: Task[]) => {
+  const addTasks = (newTasks: any[]) => {
     setTasks((prev) => [...prev, ...newTasks]);
-    showToast(`${newTasks.length} tasks added`);
   };
 
-  const updateTask = (updatedTask: Task) => {
-    setTasks((prev) => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
-    showToast('Task updated');
+  const updateCampaign = (id: string, patch: any) => {
+    setCampaigns((prev) =>
+      prev.map((c) => (c.id === id ? { ...c, ...patch } : c))
+    );
   };
 
-  const deleteTask = (taskId: string) => {
-    setTasks((prev) => prev.filter(t => t.id !== taskId));
-    showToast('Task deleted', 'info');
+  const addJob = (job: any) => {
+    setJobs((prev) => [...prev, job]);
   };
 
-  const addPayment = (payment: Payment) => {
-    setPayments((prev) => [...prev, payment]);
-    showToast('Transaction recorded');
-  };
-
-  const updatePayment = (updatedPayment: Payment) => {
-    setPayments((prev) => prev.map(p => p.id === updatedPayment.id ? updatedPayment : p));
-    showToast('Transaction updated');
-  };
-
-  const deletePayment = (id: string) => {
-    setPayments((prev) => prev.filter(p => p.id !== id));
-    showToast('Transaction deleted', 'info');
-  };
-
-  const updateTaskStatus = (id: string, status: Task['status']) => {
-    setTasks(prev => prev.map(t => t.id === id ? { ...t, status } : t));
-  };
-
-  const addJob = (job: Job) => {
-    setJobs(prev => [...prev, job]);
-    showToast('Job created successfully');
-  };
-
-  const updateJob = (updatedJob: Job) => {
-    setJobs(prev => prev.map(j => j.id === updatedJob.id ? updatedJob : j));
-    showToast('Job updated');
-  }
-
-  const updateJobStatus = (id: string, status: JobStatus) => {
-    setJobs(prev => prev.map(j => j.id === id ? { ...j, status } : j));
+  const updateJob = (id: string, patch: any) => {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, ...patch } : j))
+    );
   };
 
   const deleteJob = (id: string) => {
-    setJobs(prev => prev.filter(j => j.id !== id));
-    showToast('Job deleted', 'info');
+    setJobs((prev) => prev.filter((j) => j.id !== id));
   };
 
-  const addTeamMember = (member: TeamMember) => {
-    setTeam(prev => [...prev, member]);
-    showToast(`Invite sent to ${member.email}`);
+  const updateJobStatus = (id: string, status: string) => {
+    setJobs((prev) =>
+      prev.map((j) => (j.id === id ? { ...j, status } : j))
+    );
   };
 
-  const updateTeamMember = (member: TeamMember) => {
-    setTeam(prev => prev.map(m => m.id === member.id ? member : m));
-    showToast('Team member permissions updated');
+  const addTask = (task: any) => {
+    setTasks((prev) => [...prev, task]);
   };
 
-  const removeTeamMember = (id: string) => {
-    setTeam(prev => prev.filter(m => m.id !== id));
-    showToast('Team member removed', 'info');
+  const updateTask = (id: string, patch: any) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, ...patch } : t))
+    );
   };
 
-  const addTeamResource = (resource: TeamResource) => {
-    setTeamResources(prev => [resource, ...prev]);
-    showToast(`${resource.isFolder ? 'Folder' : 'File'} added successfully`);
+  const deleteTask = (id: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const removeTeamResource = (id: string) => {
-    setTeamResources(prev => prev.filter(r => r.id !== id));
-    showToast('Item deleted', 'info');
+  const updateTaskStatus = (id: string, status: string) => {
+    setTasks((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, status } : t))
+    );
   };
 
-  const addScriptToHistory = (script: ScriptHistoryItem) => {
-    setScriptsHistory(prev => [script, ...prev]);
+  const addPayment = (payment: any) => {
+    setPayments((prev) => [...prev, payment]);
   };
 
-  const updateMediaKit = (kit: MediaKit) => {
-    setMediaKit(kit);
-    showToast('Media Kit saved successfully');
+  const updatePayment = (id: string, patch: any) => {
+    setPayments((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...patch } : p))
+    );
   };
 
-  const sendMessage = (threadId: string, content: string, attachments?: Attachment[]) => {
-    setThreads(prev => prev.map(t => {
-      if (t.id === threadId) {
-        return {
-          ...t,
-          preview: content || (attachments ? `Sent an attachment` : ''),
-          updatedAt: 'Just now',
-          messages: [...t.messages, {
-            id: Date.now().toString(),
-            senderId: user.id,
-            senderName: user.name,
-            content: content,
-            timestamp: new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}),
-            isMe: true,
-            avatar: user.avatarUrl,
-            attachments: attachments
-          }]
-        };
-      }
-      return t;
-    }));
+  const deletePayment = (id: string) => {
+    setPayments((prev) => prev.filter((p) => p.id !== id));
   };
 
-  const createThread = (participants: string[], type: 'email' | 'chat', subject?: string) => {
-    const newThread: Thread = {
-      id: Date.now().toString(),
-      type,
-      participants,
-      subject,
-      preview: 'New conversation started',
-      updatedAt: 'Just now',
-      unreadCount: 0,
-      isArchived: false,
-      messages: []
-    };
-    setThreads(prev => [newThread, ...prev]);
-    showToast('New conversation started');
+  // team + comms
+
+  const addTeamMember = (member: any) => {
+    setTeam((prev) => [...prev, member]);
   };
 
-  const archiveThread = (threadId: string) => {
-    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, isArchived: true } : t));
-    showToast('Thread archived');
+  const updateTeamMember = (id: any, patch: any) => {
+    setTeam((prev) =>
+      prev.map((m) => (m.id === id ? { ...m, ...patch } : m))
+    );
   };
 
-  const unarchiveThread = (threadId: string) => {
-    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, isArchived: false } : t));
-    showToast('Thread unarchived');
+  const removeTeamMember = (id: any) => {
+    setTeam((prev) => prev.filter((m) => m.id !== id));
   };
 
-  const markThreadRead = (threadId: string) => {
-    setThreads(prev => prev.map(t => t.id === threadId ? { ...t, unreadCount: 0 } : t));
+  const addTeamResource = (resource: any) => {
+    setTeamResources((prev) => [...prev, resource]);
   };
 
-  return (
-    <DataContext.Provider value={{ 
-      user, 
-      campaigns, 
-      tasks, 
-      payments, 
-      jobs,
-      team,
-      teamResources,
-      scriptsHistory,
-      mediaKit,
-      threads,
-      theme,
-      toasts,
-      showToast,
-      removeToast,
-      toggleTheme,
-      updateUser,
-      addCampaign, 
-      updateCampaign,
-      addTask, 
-      addTasks, 
-      updateTask,
-      deleteTask,
-      addPayment, 
-      updatePayment,
-      deletePayment,
-      updateTaskStatus,
-      addJob,
-      updateJob,
-      updateJobStatus,
-      deleteJob,
-      addTeamMember,
-      updateTeamMember,
-      removeTeamMember,
-      addTeamResource,
-      removeTeamResource,
-      addScriptToHistory,
-      updateMediaKit,
-      sendMessage,
-      createThread,
-      archiveThread,
-      unarchiveThread,
-      markThreadRead
-    }}>
-      {children}
-    </DataContext.Provider>
-  );
+  const removeTeamResource = (id: any) => {
+    setTeamResources((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  const createThread = (thread: any) => {
+    setThreads((prev) => [thread, ...prev]);
+  };
+
+  const sendMessage = (threadId: any, message: any) => {
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId
+          ? { ...t, messages: [...(t.messages || []), message] }
+          : t
+      )
+    );
+  };
+
+  const markThreadRead = (threadId: any) => {
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId ? { ...t, unread: false } : t
+      )
+    );
+  };
+
+  const archiveThread = (threadId: any) => {
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId ? { ...t, archived: true } : t
+      )
+    );
+  };
+
+  const unarchiveThread = (threadId: any) => {
+    setThreads((prev) =>
+      prev.map((t) =>
+        t.id === threadId ? { ...t, archived: false } : t
+      )
+    );
+  };
+
+  // ---------- value ----------
+
+  const value: DataContextValue = {
+    campaigns,
+    tasks,
+    payments,
+    jobs,
+    loading,
+    error,
+
+    user,
+    updateUser,
+
+    theme,
+    toggleTheme,
+
+    toasts,
+    addToast,
+    removeToast,
+    showToast,
+
+    mediaKit,
+    updateMediaKit,
+
+    scriptsHistory,
+    addScriptToHistory,
+
+    team,
+    teamResources,
+    threads,
+
+    addCampaign,
+    addTasks,
+    updateCampaign,
+
+    addJob,
+    updateJob,
+    deleteJob,
+    updateJobStatus,
+
+    addTask,
+    updateTask,
+    deleteTask,
+    updateTaskStatus,
+
+    addPayment,
+    updatePayment,
+    deletePayment,
+
+    sendMessage,
+    markThreadRead,
+    archiveThread,
+    unarchiveThread,
+    createThread,
+
+    addTeamMember,
+    updateTeamMember,
+    removeTeamMember,
+    addTeamResource,
+    removeTeamResource,
+  };
+
+  return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 };
 
+// ---------- Hook ----------
+
 export const useData = () => {
-  const context = useContext(DataContext);
-  if (context === undefined) {
-    throw new Error('useData must be used within a DataProvider');
+  const ctx = useContext(DataContext);
+  if (!ctx) {
+    throw new Error("useData must be used within a DataProvider");
   }
-  return context;
+  return ctx;
 };

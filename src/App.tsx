@@ -1,21 +1,23 @@
+import React from "react";
+import { HashRouter, Routes, Route, Navigate } from "react-router-dom";
 
-import React from 'react';
-import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
-import { DataProvider } from './context/DataContext';
-import DashboardLayout from './layouts/DashboardLayout';
-import Dashboard from './pages/Dashboard';
-import Campaigns from './pages/Campaigns';
-import ContentPlanner from './pages/Calendar';
-import Payments from './pages/Payments';
-import Settings from './pages/Settings';
-import UGCJobs from './pages/UGCJobs';
-import ScriptsGenerator from './pages/ScriptsGenerator';
-import MediaKit from './pages/MediaKit';
-import Communications from './pages/Communications';
-import Team from './pages/Team';
-import UserProfile from './pages/UserProfile';
-import TemplatesLibrary from './pages/TemplatesLibrary';
-import AIAssist from './pages/AIAssist';
+import { DataProvider } from "./context/DataContext";
+import DashboardLayout from "./layouts/DashboardLayout";
+
+// PAGES
+import Dashboard from "./pages/Dashboard";
+import Campaigns from "./pages/Campaigns";
+import ContentPlanner from "./pages/Calendar";
+import Payments from "./pages/Payments";
+import Settings from "./pages/Settings";
+import UGCJobs from "./pages/UGCJobs";
+import ScriptsGenerator from "./pages/ScriptsGenerator";
+import MediaKit from "./pages/MediaKit";
+import Communications from "./pages/Communications";
+import Team from "./pages/Team";
+import UserProfile from "./pages/UserProfile";
+import TemplatesLibrary from "./pages/TemplatesLibrary";
+import AIAssist from "./pages/AIAssist";
 
 const App: React.FC = () => {
   return (
